@@ -79,8 +79,45 @@ export const login = async (req, res) => {
 
             res.status(200).json({ user: { ...user._doc, password: undefined }, message: "User logined Successfully" })
         }
+        else{
+            res.status(400).json({message: "Invalid Credentails" })
+        }
     } catch (error) {
         console.log("error while login",error.message)
+        return res.status(500).json({message : "Internal Server Error"})
+    }
+}
+
+export const refreshToken = async (req,res) => {
+    try{
+        const refreshToken = req.cookies.refreshToken
+
+        if(!refreshToken){
+            return res.status(400).json({message : "No refresh token Provided"})
+        }
+
+
+        const decoded = jwt.verify(refreshToken,process.env.SECRET_KEY)
+        const storedRefreshToken = await redis.get(`refresh-token:${decoded.userId}`)
+
+        if(storedRefreshToken !== refreshToken){
+            return res.status(400).json({message : "Innvalid refresh Token"})
+        }
+
+        const accessToken = jwt.sign({userId : decoded.userId},process.env.SECRET_KEY,{
+            expiresIn : "15m"
+        })
+
+        res.cookie("accessToken",accessToken,{
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            maxAge: 15 * 60 * 1000
+        })
+        res.json({message : "Token refreshed successfully"})
+
+    }catch(error){
+        console.log("Error while refreshToken",error.message)
         return res.status(500).json({message : "Internal Server Error"})
     }
 }
