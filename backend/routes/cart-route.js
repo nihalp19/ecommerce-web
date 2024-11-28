@@ -8,3 +8,5 @@ router.post("/",protectRoute,addToCart)
 router.get("/",protectRoute,getCartProducts)
 router.delete("/",protectRoute,removeAllFromCart)
 router.put(":/id",protectRoute,updateQuantity)
+
+export default router
