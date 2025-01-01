@@ -1,123 +1,29 @@
-import User from "../models/user-model.js"
-import { redis } from "../lib/redis.js"
-import { generateToken } from "../lib/generateToken.js"
-import dotenv from "dotenv"
-import jwt from "jsonwebtoken"
-
-dotenv.config()
-
-const storeRefreshToken = async (userId, refreshToken) => {
-    await redis.set(`refresh-token:${userId}`, refreshToken, "EX", 7 * 24 * 60 * 60 * 1000)
-}
-
-const setCookies = (res, accessToken, refreshToken) => {
-    res.cookie("accessToken", accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: 15 * 60 * 1000
-    })
-    res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000
-    })
-}
-
-export const signup = async (req, res) => {
-    try {
-        const { email, name, password } = req.body
-        const userExits = await User.findOne({ email })
-
-        if (userExits) {
-            return res.status(400).json({ message: "User already exits" })
-        }
-        const user = await User.create({ name, email, password })
-        const { accessToken, refreshToken } = generateToken(user._id)
-        await storeRefreshToken(user._id, refreshToken)
-        storeRefreshToken(user._id, refreshToken)
-        setCookies(res, accessToken, refreshToken)
-        res.status(201).json({
-            user: {
-                ...user._doc,
-                password: undefined
-            }, message: "User created successfully"
-        })
-    } catch (error) {
-        console.log("error while signup", error.message)
-        return res.status(500).json({ message: "Internal Server Error" })
-    }
-}
-
-export const logout = async (req, res) => {
-    try {
-        const refreshToken = req.cookies.refreshToken
-        if (refreshToken) {
-            const decode = jwt.verify(refreshToken, process.env.SECRET_KEY)
-            await redis.del(`refresh-token:${decode.userId}`)
-        }
-
-        res.clearCookie("refreshToken")
-        res.clearCookie("accessToken")
-        res.status(200).json({ message: "User logged-out Successfully" })
-    } catch (error) {
-        console.log("Error while logout", error.message)
-        return res.status(500).json({ message: "Internal Server Error" })
-    }
-}
-
-export const login = async (req, res) => {
-    try {
-        const { email, password } = req.body
-        const user = await User.findOne({ email })
-
-        if (user && (await user.comparePassword(password))) {
-            const { accessToken, refreshToken } = generateToken(user._id)
-            await storeRefreshToken(user._id, refreshToken)
-            setCookies(res, accessToken, refreshToken)
-
-            res.status(200).json({ user: { ...user._doc, password: undefined }, message: "User logined Successfully" })
-        }
-        else{
-            res.status(400).json({message: "Invalid Credentails" })
-        }
-    } catch (error) {
-        console.log("error while login",error.message)
-        return res.status(500).json({message : "Internal Server Error"})
-    }
-}
-
-export const refreshToken = async (req,res) => {
+import User from "../models/user-models.js"
+export const signup = async(req,res) => {
     try{
-        const refreshToken = req.cookies.refreshToken
+        const {name,email,password} = req.body
+        const userExits = await User.findOne({email})
 
-        if(!refreshToken){
-            return res.status(400).json({message : "No refresh token Provided"})
+        if(userExits){
+            return res.status(400).json({succes : false,message : "User already exits"})
         }
 
-
-        const decoded = jwt.verify(refreshToken,process.env.SECRET_KEY)
-        const storedRefreshToken = await redis.get(`refresh-token:${decoded.userId}`)
-
-        if(storedRefreshToken !== refreshToken){
-            return res.status(400).json({message : "Innvalid refresh Token"})
-        }
-
-        const accessToken = jwt.sign({userId : decoded.userId},process.env.SECRET_KEY,{
-            expiresIn : "15m"
-        })
-
-        res.cookie("accessToken",accessToken,{
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "strict",
-            maxAge: 15 * 60 * 1000
-        })
-        res.json({message : "Token refreshed successfully"})
+        const user = await User.create({name,email,password})
+        return res.status(200).json({succes : true,message : "User registered successfully",user : {
+            ...user._doc,
+            password : undefined
+        }})
 
     }catch(error){
-        console.log("Error while refreshToken",error.message)
-        return res.status(500).json({message : "Internal Server Error"})
+        console.log("Error While Registration",error.message)
+        return res.status(500).json({succes : false,message : "Internal Server Error",error : error.message})
     }
+}
+
+
+export const login = async() => {
+
+}
+export const logout = async() => {
+
 }
